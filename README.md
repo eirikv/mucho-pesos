@@ -12,6 +12,29 @@
 - **Pixel 10 / Pixel 10 Pro Material 3 Design**: Dynamic Color (`dynamicLightColorScheme` / `dynamicDarkColorScheme`), full edge-to-edge gesture insets, tabular financial numerals, pull-to-refresh, grouped household categories (6 groups, 21 categories), and predictive back navigation.
 - **Built-in Demo Mode**: Test every flow end-to-end against a local simulated append-only sheet before configuring Google Cloud credentials.
 
+## Spreadsheet Schema (`Ledger` Tab)
+
+The `Ledger` tab is strictly append-only (`A1:P`), with one row per event:
+
+| Column | Description | Example |
+| --- | --- | --- |
+| `tx_id` | Unique UUID v4 identifier for the ledger row. | `550e8400-e29b-41d4-a716-446655440000` |
+| `record_type` | Event type: `EXPENSE`, `SETTLEMENT`, or `VOID` (tombstone cancelling a prior row). | `EXPENSE` |
+| `ref_tx_id` | Original `tx_id` referenced by a `VOID` tombstone or an edited replacement `EXPENSE`; empty for new entries. | `""` *(or `550e8400-...` on `VOID`/edit)* |
+| `date` | Transaction date in ISO-8601 format (`YYYY-MM-DD`). | `2026-11-20` |
+| `created_at` | UTC creation timestamp in ISO-8601 format. | `2026-11-20T18:30:00Z` |
+| `created_by` | Email address of the signed-in user who appended the row. | `alex@example.com` |
+| `description` | Short transaction title, `"Settlement payment"`, or void reason. | `Weekly Groceries` |
+| `category_group` | Top-level category group (`FOOD`, `HOUSING`, `TRANSPORT`, `UTILITIES`, `ENTERTAINMENT`, `OTHER`, or `SETTLEMENT`; empty for `VOID`). | `FOOD` |
+| `category` | Specific category display name within the group (e.g. `Groceries`, `Electricity & Gas`, `Settlement`; empty for `VOID`). | `Groceries` |
+| `amount` | Total transaction amount as a plain decimal string scaled to the ledger's home currency (`0.00` for `VOID`). | `120.00` |
+| `paid_by` | Partner who paid the expense or sent the settlement: `PARTNER_A` or `PARTNER_B` (mapped in the `Config` tab). | `PARTNER_A` |
+| `split_type` | Split mode used for the row: `EQUAL`, `EXACT`, `PERCENTAGE`, `FULL`, or `SETTLEMENT`. | `PERCENTAGE` |
+| `partner_a_share` | Partner A's share of `amount` as a plain decimal string (`0.00` for `SETTLEMENT` and `VOID`). | `72.00` |
+| `partner_b_share` | Partner B's share of `amount` as a plain decimal string (`partner_a_share + partner_b_share = amount`; `0.00` for `SETTLEMENT` and `VOID`). | `48.00` |
+| `split_meta` | Extra split parameters: `"A%:B%"` for `PERCENTAGE` (e.g. `60:40`), owing partner role (`PARTNER_A`/`PARTNER_B`) for `FULL`, empty otherwise. | `60:40` |
+| `notes` | Optional free-text notes attached to the transaction. | `Weekly produce and pantry staples` |
+
 ## Tech Stack
 
 - **Target**: Pixel 10 / Pixel 10 Pro (`minSdk = 36`, `compileSdk = 37`, `targetSdk = 37`)
