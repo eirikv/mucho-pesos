@@ -58,3 +58,44 @@ The `Ledger` tab is strictly append-only (`A1:P`), with one row per event:
 # Build the debug APK
 ./gradlew assembleDebug
 ```
+
+## Building & Distributing New Versions (Google Drive)
+
+Because Mucho Pesos is used privately by two partners, you can distribute new debug builds directly as an APK via a shared Google Drive folder—no Google Play Console required.
+
+### Prerequisites (One-Time)
+
+1. **Google Cloud OAuth configured**: Make sure `GOOGLE_WEB_CLIENT_ID` is set in `local.properties` and both partners' Gmail addresses are listed under **Test users** in Google Cloud Console (see [GOOGLE_CLOUD_SETUP.md](GOOGLE_CLOUD_SETUP.md)).
+2. **Consistent debug keystore**: Always build APKs using the same `~/.android/debug.keystore` whose SHA-1 is registered in Google Cloud Console.
+   - Android requires the same signing certificate to update the app in place without uninstalling.
+   - Google Sign-In/OAuth validates the APK's SHA-1 fingerprint against your Android OAuth client.
+   - Back up `~/.android/debug.keystore` if you switch machines.
+3. **Shared Drive folder**: Create a Google Drive folder (e.g., `Mucho Pesos Builds`) and share it with your partner.
+
+### Release Checklist for Each New Version
+
+1. **Bump the version** in `app/build.gradle.kts`:
+   ```kotlin
+   versionCode = 2       // Increment by 1 for every build so Android allows in-place updates
+   versionName = "1.0.1" // Human-readable version
+   ```
+2. **Run tests and build the debug APK**:
+   ```bash
+   ./gradlew testDebugUnitTest assembleDebug
+   ```
+   The APK is generated at:
+   ```text
+   app/build/outputs/apk/debug/app-debug.apk
+   ```
+3. **(Optional) Copy with a versioned filename** before uploading (`*.apk` is gitignored):
+   ```bash
+   cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/mucho-pesos-v1.0.1-debug.apk
+   ```
+4. **Upload to Google Drive**: Upload the `.apk` to your shared `Mucho Pesos Builds` folder.
+
+### Installing / Updating on Each Phone
+
+1. Open the **Google Drive** app on Android and tap the new `.apk` file.
+2. **First time only**: When prompted, grant Google Drive permission to **Install unknown apps** (Android opens the toggle automatically).
+3. If Google Play Protect warns that the app is unrecognized (normal for self-built debug APKs), tap **More details → Install anyway**.
+4. Tap **Install** (first time) or **Update** (subsequent versions). As long as `versionCode` increased and the same debug keystore was used, Android updates in place while preserving your sign-in state and linked spreadsheet.
