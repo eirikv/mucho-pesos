@@ -1,6 +1,8 @@
 package vige.land.muchopesos.domain
 
 import java.math.BigDecimal
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -9,6 +11,7 @@ import vige.land.muchopesos.domain.logic.SpreadsheetIdParser
 import vige.land.muchopesos.domain.model.CategoryCatalog
 import vige.land.muchopesos.domain.model.CategoryGroup
 import vige.land.muchopesos.domain.model.CurrencyCatalog
+import vige.land.muchopesos.ui.components.formatCompactMoney
 
 class MoneyFormatterAndParserTest {
 
@@ -46,18 +49,103 @@ class MoneyFormatterAndParserTest {
     }
 
     @Test
-    fun format_andFormatSigned_variousCurrencies() {
-        assertEquals("$42.50", MoneyFormatter.format(BigDecimal("42.5"), CurrencyCatalog.USD))
-        assertEquals("-$42.50", MoneyFormatter.format(BigDecimal("-42.50"), CurrencyCatalog.USD))
-        assertEquals("$1,234.56", MoneyFormatter.format(BigDecimal("1234.56"), CurrencyCatalog.USD))
-        assertEquals("€1,250.00", MoneyFormatter.format(BigDecimal("1250"), CurrencyCatalog.EUR))
-        assertEquals("450.00 kr", MoneyFormatter.format(BigDecimal("450"), CurrencyCatalog.NOK))
-        assertEquals("CHF 99.95", MoneyFormatter.format(BigDecimal("99.95"), CurrencyCatalog.CHF))
-        assertEquals("¥1,500", MoneyFormatter.format(BigDecimal("1500"), CurrencyCatalog.JPY))
+    fun format_andFormatSigned_variousCurrenciesInUsLocale() {
+        assertEquals("$42.50", MoneyFormatter.format(BigDecimal("42.5"), CurrencyCatalog.USD, Locale.US))
+        assertEquals("-$42.50", MoneyFormatter.format(BigDecimal("-42.50"), CurrencyCatalog.USD, Locale.US))
+        assertEquals("$1,234.56", MoneyFormatter.format(BigDecimal("1234.56"), CurrencyCatalog.USD, Locale.US))
+        assertEquals("€1,250.00", MoneyFormatter.format(BigDecimal("1250"), CurrencyCatalog.EUR, Locale.US))
+        assertEquals("450.00 kr", MoneyFormatter.format(BigDecimal("450"), CurrencyCatalog.NOK, Locale.US))
+        assertEquals("CHF 99.95", MoneyFormatter.format(BigDecimal("99.95"), CurrencyCatalog.CHF, Locale.US))
+        assertEquals("¥1,500", MoneyFormatter.format(BigDecimal("1500"), CurrencyCatalog.JPY, Locale.US))
 
-        assertEquals("+$42.50", MoneyFormatter.formatSigned(BigDecimal("42.50"), CurrencyCatalog.USD))
-        assertEquals("-$42.50", MoneyFormatter.formatSigned(BigDecimal("-42.50"), CurrencyCatalog.USD))
-        assertEquals("$0.00", MoneyFormatter.formatSigned(BigDecimal.ZERO, CurrencyCatalog.USD))
+        assertEquals("+$42.50", MoneyFormatter.formatSigned(BigDecimal("42.50"), CurrencyCatalog.USD, Locale.US))
+        assertEquals("-$42.50", MoneyFormatter.formatSigned(BigDecimal("-42.50"), CurrencyCatalog.USD, Locale.US))
+        assertEquals("$0.00", MoneyFormatter.formatSigned(BigDecimal.ZERO, CurrencyCatalog.USD, Locale.US))
+    }
+
+    @Test
+    fun format_respectsNorwegianLocaleAndAndroidRegionOverrides() {
+        val nbNo = Locale.forLanguageTag("nb-NO")
+        val noGroup = DecimalFormatSymbols.getInstance(nbNo).groupingSeparator
+        val expectedNok = "10${noGroup}000,50 kr"
+        val expectedUsd = "\$10${noGroup}000,50"
+
+        assertEquals(expectedNok, MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.NOK, nbNo))
+        assertEquals(expectedUsd, MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.USD, nbNo))
+        assertEquals(
+            "+$expectedNok",
+            MoneyFormatter.formatSigned(BigDecimal("10000.50"), CurrencyCatalog.NOK, nbNo),
+        )
+        assertEquals(
+            "-$expectedNok",
+            MoneyFormatter.formatSigned(BigDecimal("-10000.50"), CurrencyCatalog.NOK, nbNo),
+        )
+
+        // English UI language with Norway region (en-NO) or Android Regional Preferences (u-rg-nozzzz)
+        val enNo = Locale.forLanguageTag("en-NO")
+        val enUsRegionNo = Locale.forLanguageTag("en-US-u-rg-nozzzz")
+        assertEquals(expectedNok, MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.NOK, enNo))
+        assertEquals(expectedNok, MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.NOK, enUsRegionNo))
+
+        // Reverse region override: Norwegian UI language with US region
+        val nbNoRegionUs = Locale.forLanguageTag("nb-NO-u-rg-uszzzz")
+        assertEquals("10,000.50 kr", MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.NOK, nbNoRegionUs))
+    }
+
+    @Test
+    fun format_respectsOtherEuropeanAndMultilingualLocales() {
+        assertEquals(
+            "€10.000,50",
+            MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.EUR, Locale.GERMANY),
+        )
+        assertEquals(
+            "10.000,50 kr",
+            MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.DKK, Locale.forLanguageTag("da-DK")),
+        )
+        assertEquals(
+            "€10.000,50",
+            MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.EUR, Locale.forLanguageTag("en-US-u-rg-dezzzz")),
+        )
+
+        // Multilingual country preserves explicit official language (fr-CA vs en-CA)
+        val frCa = Locale.forLanguageTag("fr-CA")
+        val frCaGroup = DecimalFormatSymbols.getInstance(frCa).groupingSeparator
+        assertEquals(
+            "CA\$10${frCaGroup}000,50",
+            MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.CAD, frCa),
+        )
+        assertEquals(
+            "CA\$10,000.50",
+            MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.CAD, Locale.CANADA),
+        )
+    }
+
+    @Test
+    fun format_defaultsToFormatLocaleCategory() {
+        val originalDisplay = Locale.getDefault(Locale.Category.DISPLAY)
+        val originalFormat = Locale.getDefault(Locale.Category.FORMAT)
+        try {
+            Locale.setDefault(Locale.Category.DISPLAY, Locale.US)
+            Locale.setDefault(Locale.Category.FORMAT, Locale.GERMANY)
+            assertEquals("€10.000,50", MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.EUR))
+
+            Locale.setDefault(Locale.Category.FORMAT, Locale.forLanguageTag("en-US-u-rg-nozzzz"))
+            val noGroup = DecimalFormatSymbols.getInstance(Locale.forLanguageTag("nb-NO")).groupingSeparator
+            assertEquals("10${noGroup}000,50 kr", MoneyFormatter.format(BigDecimal("10000.50"), CurrencyCatalog.NOK))
+        } finally {
+            Locale.setDefault(Locale.Category.DISPLAY, originalDisplay)
+            Locale.setDefault(Locale.Category.FORMAT, originalFormat)
+        }
+    }
+
+    @Test
+    fun formatCompactMoney_respectsLocaleDecimalSeparator() {
+        val nbNo = Locale.forLanguageTag("nb-NO")
+        assertEquals("$1.3k", formatCompactMoney(BigDecimal("1250"), CurrencyCatalog.USD, Locale.US))
+        assertEquals("1,3k kr", formatCompactMoney(BigDecimal("1250"), CurrencyCatalog.NOK, nbNo))
+        assertEquals("1,3k kr", formatCompactMoney(BigDecimal("1250"), CurrencyCatalog.NOK, Locale.forLanguageTag("en-US-u-rg-nozzzz")))
+        assertEquals("12k kr", formatCompactMoney(BigDecimal("12400"), CurrencyCatalog.NOK, nbNo))
+        assertEquals("0 kr", formatCompactMoney(BigDecimal.ZERO, CurrencyCatalog.NOK, nbNo))
     }
 
     @Test

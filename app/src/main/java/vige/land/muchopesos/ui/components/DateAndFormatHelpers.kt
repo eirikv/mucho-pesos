@@ -54,25 +54,38 @@ fun formatShortMonth(
 }
 
 /**
- * Compact [BigDecimal] currency label for tight bar-chart annotations (e.g. "$516", "$1.2k").
+ * Compact [BigDecimal] currency label for tight bar-chart annotations (e.g. "$516", "$1.2k",
+ * or "1,2k kr" in comma-decimal regions).
  */
-fun formatCompactMoney(amount: BigDecimal, currency: CurrencySpec): String {
+fun formatCompactMoney(
+    amount: BigDecimal,
+    currency: CurrencySpec,
+    locale: Locale = MoneyFormatter.defaultFormatLocale(),
+): String {
     val absAmount = amount.abs()
     if (absAmount.compareTo(BigDecimal.ZERO) == 0) {
-        return MoneyFormatter.format(BigDecimal.ZERO, currency.copy(fractionDigits = 0))
+        return MoneyFormatter.format(BigDecimal.ZERO, currency.copy(fractionDigits = 0), locale)
     }
     return when {
         absAmount.compareTo(TEN_THOUSAND) >= 0 -> {
-            val k = absAmount.divide(THOUSAND, 0, RoundingMode.HALF_UP).toPlainString()
+            val k = MoneyFormatter.formatNumber(
+                absAmount = absAmount.divide(THOUSAND, 0, RoundingMode.HALF_UP),
+                fractionDigits = 0,
+                locale = locale,
+            )
             applyCompactSymbol("${k}k", currency)
         }
         absAmount.compareTo(THOUSAND) >= 0 -> {
-            val k = absAmount.divide(THOUSAND, 1, RoundingMode.HALF_UP)
-                .stripTrailingZeros()
-                .toPlainString()
+            val scaledK = absAmount.divide(THOUSAND, 1, RoundingMode.HALF_UP).stripTrailingZeros()
+            val digits = scaledK.scale().coerceAtLeast(0)
+            val k = MoneyFormatter.formatNumber(
+                absAmount = scaledK,
+                fractionDigits = digits,
+                locale = locale,
+            )
             applyCompactSymbol("${k}k", currency)
         }
-        else -> MoneyFormatter.format(absAmount, currency.copy(fractionDigits = 0))
+        else -> MoneyFormatter.format(absAmount, currency.copy(fractionDigits = 0), locale)
     }
 }
 
